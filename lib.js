@@ -131,13 +131,39 @@ async function findRuleset(owner, repo, token, fetchImpl) {
   return rulesets.find((r) => r.name === RULESET_NAME) || null;
 }
 
-async function applyBranchRuleset(owner, repo, token, fetchImpl) {
-  const existing = await findRuleset(owner, repo, token, fetchImpl);
-  const body = branchRulesetBody();
-  if (existing) {
-    return rest('PUT', `/repos/${owner}/${repo}/rulesets/${existing.id}`, token, body, fetchImpl);
+// GitHub's own 403 for this case ("Upgrade to GitHub Pro...") names the Pro
+// plan regardless of whether the repo is owned by a personal account or an
+// organization. For an org-owned private repo, rulesets actually require the
+// *organization* to be on Team or Enterprise — an org owner's personal Pro
+// subscription does not satisfy this, which is genuinely confusing (verified
+// against GitHub's own ruleset docs, cycle 19, after this exact confusion
+// blocked a real user). Re-thrown here with the org/user distinction made
+// explicit instead of relaying GitHub's ambiguous message as-is.
+function clarifyRulesetError(err, ownerType, owner) {
+  if (!/Upgrade to GitHub/i.test(err.message)) return err;
+  if (ownerType === 'Organization') {
+    return new Error(
+      `${err.message}\n` +
+      `  Note: "${owner}" is an organization, so this requires the ORGANIZATION's ` +
+      `plan to be Team or Enterprise — an individual member's personal GitHub Pro ` +
+      `subscription does not unlock this for org-owned repos. Upgrade the ` +
+      `"${owner}" org's plan, or make this repository public.`
+    );
   }
-  return rest('POST', `/repos/${owner}/${repo}/rulesets`, token, body, fetchImpl);
+  return err;
+}
+
+async function applyBranchRuleset(owner, repo, token, ownerType, fetchImpl) {
+  try {
+    const existing = await findRuleset(owner, repo, token, fetchImpl);
+    const body = branchRulesetBody();
+    if (existing) {
+      return await rest('PUT', `/repos/${owner}/${repo}/rulesets/${existing.id}`, token, body, fetchImpl);
+    }
+    return await rest('POST', `/repos/${owner}/${repo}/rulesets`, token, body, fetchImpl);
+  } catch (err) {
+    throw clarifyRulesetError(err, ownerType, owner);
+  }
 }
 
 async function setup(repoUrlOrSlug, token, fetchImpl = fetch, log = () => {}) {
@@ -154,7 +180,7 @@ async function setup(repoUrlOrSlug, token, fetchImpl = fetch, log = () => {}) {
   const discussions = await enableDiscussions(info.node_id, token, fetchImpl);
   log(`discussions enabled: ${discussions.hasDiscussionsEnabled}`);
 
-  await applyBranchRuleset(owner, repo, token, fetchImpl);
+  await applyBranchRuleset(owner, repo, token, info.owner.type, fetchImpl);
   log('default-branch ruleset applied (restrict deletions, require linear history, block force ' +
     'pushes, require a PR with 1 approval + last-push approval + resolved conversations + squash-only ' +
     'merge, repo admins can bypass)');
@@ -172,6 +198,7 @@ module.exports = {
   enableDiscussions,
   branchRulesetBody,
   findRuleset,
+  clarifyRulesetError,
   applyBranchRuleset,
   setup,
   RULESET_NAME,
