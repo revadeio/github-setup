@@ -5,6 +5,8 @@ const assert = require('node:assert/strict');
 const {
   parseRepoUrl,
   branchRulesetBody,
+  clarifyRulesetError,
+  applyBranchRuleset,
   setup,
   RULESET_NAME,
 } = require('./lib.js');
@@ -90,7 +92,7 @@ function makeFakeFetch({ rulesetsExisting = [] } = {}) {
     });
 
     if (method === 'GET' && path === '/repos/angarg/paperloom') {
-      return json(200, { node_id: 'R_kgNODEID', default_branch: 'main' });
+      return json(200, { node_id: 'R_kgNODEID', default_branch: 'main', owner: { type: 'User' } });
     }
     if (method === 'PATCH' && path === '/repos/angarg/paperloom') {
       return json(200, { updated: true });
@@ -154,6 +156,44 @@ test('setup: existing ruleset with the same name -> updates in place (idempotent
   const methods = calls.map((c) => `${c.method} ${c.path}`);
   assert.ok(methods.includes('PUT /repos/angarg/paperloom/rulesets/42'));
   assert.ok(!methods.some((m) => m.startsWith('POST /repos/')));
+});
+
+test('clarifyRulesetError: leaves non-plan errors untouched', () => {
+  const err = new Error('GET /repos/x/y/rulesets -> 404 Not Found');
+  assert.equal(clarifyRulesetError(err, 'Organization', 'revadeio'), err);
+});
+
+test('clarifyRulesetError: leaves the plan-gate error untouched for a personal-account owner', () => {
+  const err = new Error(
+    'POST /repos/x/y/rulesets -> 403 Upgrade to GitHub Pro or make this repository public to enable this feature.'
+  );
+  assert.equal(clarifyRulesetError(err, 'User', 'someuser'), err);
+});
+
+test('clarifyRulesetError: adds the org-plan clarification when owner is an Organization', () => {
+  const err = new Error(
+    'POST /repos/revadeio/paperloom/rulesets -> 403 Upgrade to GitHub Pro or make this repository public to enable this feature.'
+  );
+  const clarified = clarifyRulesetError(err, 'Organization', 'revadeio');
+  assert.notEqual(clarified, err);
+  assert.match(clarified.message, /organization/i);
+  assert.match(clarified.message, /Team or Enterprise/);
+  assert.match(clarified.message, /"revadeio"/);
+});
+
+test('applyBranchRuleset: a 403 plan-gate error from an org repo is clarified end-to-end', async () => {
+  const fetchImpl = async () => ({
+    ok: false,
+    status: 403,
+    statusText: 'Forbidden',
+    text: async () => JSON.stringify({
+      message: 'Upgrade to GitHub Pro or make this repository public to enable this feature.',
+    }),
+  });
+  await assert.rejects(
+    () => applyBranchRuleset('revadeio', 'paperloom', 'fake-token', 'Organization', fetchImpl),
+    /"revadeio" is an organization/i,
+  );
 });
 
 test('setup: REST error surfaces repo/path/status in the message', async () => {

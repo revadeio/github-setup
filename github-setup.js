@@ -5,13 +5,15 @@ const { setup } = require('./lib.js');
 
 function usage() {
   return [
-    'Usage: GH_TOKEN=<token> github-setup <repo_url>',
+    'Usage: GH_TOKEN=<token> github-setup <repo_url> [repo_url...]',
     '',
-    '  <repo_url>  a GitHub repo as a URL (https://github.com/owner/repo),',
-    '              an SSH remote (git@github.com:owner/repo.git), or a',
-    '              plain "owner/repo" slug.',
+    '  <repo_url>  one or more GitHub repos, each as a URL',
+    '              (https://github.com/owner/repo), an SSH remote',
+    '              (git@github.com:owner/repo.git), or a plain',
+    '              "owner/repo" slug. Repos are set up independently —',
+    '              one failing does not stop the rest.',
     '',
-    'Requires a GH_TOKEN with admin rights on the repo (repo scope, or a',
+    'Requires a GH_TOKEN with admin rights on each repo (repo scope, or a',
     'fine-grained token with Administration: read & write). Configures:',
     '  - wiki, issues, pull requests, discussions: enabled',
     '  - projects: disabled',
@@ -26,10 +28,10 @@ function usage() {
 }
 
 async function main() {
-  const arg = process.argv[2];
-  if (!arg || arg === '-h' || arg === '--help') {
+  const args = process.argv.slice(2);
+  if (!args.length || args[0] === '-h' || args[0] === '--help') {
     console.log(usage());
-    process.exit(arg ? 0 : 1);
+    process.exit(args.length ? 0 : 1);
   }
 
   const token = process.env.GH_TOKEN;
@@ -39,13 +41,22 @@ async function main() {
     process.exit(1);
   }
 
-  try {
-    await setup(arg, token, fetch, (line) => console.log(line));
-    console.log('done.');
-  } catch (err) {
-    console.error(`error: ${err.message}`);
-    process.exit(1);
+  const failures = [];
+  for (const arg of args) {
+    try {
+      await setup(arg, token, fetch, (line) => console.log(line));
+      console.log(`done: ${arg}`);
+    } catch (err) {
+      console.error(`error: ${arg}: ${err.message}`);
+      failures.push(arg);
+    }
+    if (args.length > 1) console.log('');
   }
+
+  if (args.length > 1) {
+    console.log(`${args.length - failures.length}/${args.length} repos configured successfully.`);
+  }
+  if (failures.length) process.exit(1);
 }
 
 main();

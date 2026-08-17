@@ -41,11 +41,15 @@ above instead, no permissions wrangling required.
 ## Usage
 
 ```
-GH_TOKEN=<token> github-setup <repo_url>
+GH_TOKEN=<token> github-setup <repo_url> [repo_url...]
 ```
 
 `<repo_url>` accepts a full URL (`https://github.com/owner/repo`), an SSH
-remote (`git@github.com:owner/repo.git`), or a plain `owner/repo` slug.
+remote (`git@github.com:owner/repo.git`), or a plain `owner/repo` slug. Pass
+several to set up multiple repos in one run — each is configured
+independently, so one failing doesn't stop the rest; the exit code is
+non-zero if any repo failed, and a summary line (`N/M repos configured
+successfully`) is printed when more than one repo was given.
 
 ## What it does
 
@@ -81,19 +85,42 @@ instead of creating a duplicate.
 ## A real platform limitation, not a bug in this script
 
 GitHub's [repository rulesets](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/about-rulesets)
-require **GitHub Pro, Team, or Enterprise** to use on a **private**
-repository owned by a personal (non-organization) account. On a Free
-personal account, creating a ruleset on a private repo fails with:
+require a paid plan to use on a **private** repository. Creating a ruleset
+on a private repo without the right plan fails with:
 
 ```
 403 Upgrade to GitHub Pro or make this repository public to enable this feature.
 ```
 
-This was found by running the script live against a real private test
-repo, not read from documentation alone. It has no effect on public
-repos, or on private repos owned by an organization plan that includes
-rulesets. The feature toggles and merge settings (everything except the
-ruleset step) apply regardless of plan or visibility.
+**The plan that matters depends on who owns the repo, and GitHub's own error
+message doesn't say so** — this genuinely confused a real user (an org
+owner with a personal Pro subscription, whose org-owned repo still hit this
+403) before it was tracked down:
+
+- **Personal-account-owned repo:** the *account's* plan must be Pro, Team,
+  or Enterprise.
+- **Organization-owned repo:** the *organization's* plan must be Team or
+  Enterprise — an individual member's personal Pro subscription does not
+  unlock this for repos owned by the org, even if that member is the org's
+  owner/admin.
+
+`github-setup` now detects this specific error and, when the repo is
+org-owned, rewrites it to name the organization explicitly and say plainly
+that the org's plan (not the caller's personal plan) is what needs to
+change — instead of relaying GitHub's ambiguous message as-is.
+
+The underlying 403 and its exact wording were found by running the script
+live against a real private test repo on a personal Free-plan account. The
+org-ownership branch of the clarification (the part that names the org
+explicitly) is verified against that same real error string via an offline
+test, not reproduced live against an actual org — doing that would need
+admin rights on an organization already sitting on the Free plan, which
+this script's own author doesn't have on the one org-owned repo this fix
+was written for (only push/write access there, not admin — this script has
+to be run by someone with admin rights on the target repo, i.e. an org
+owner). It has no effect on public repos. The feature toggles and merge
+settings (everything except the ruleset step) apply regardless of plan,
+visibility, or ownership.
 
 ## Why discussions goes through GraphQL
 
