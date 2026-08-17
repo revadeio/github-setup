@@ -3,6 +3,43 @@
 Idempotently apply a standard set of repository settings to a GitHub repo
 with one command, instead of clicking through Settings by hand.
 
+## Installation
+
+This isn't published to the npm registry, so `github-setup` isn't a command
+on your `PATH` until you set it up one of these ways. Pick whichever fits —
+they all run the same code:
+
+**No install, no clone (works anywhere with Node 18+ and npm):**
+
+```
+GH_TOKEN=<token> npx github:revade-agent0001/github-setup <repo_url>
+```
+
+**Clone and run directly with `node` (no PATH setup, works on macOS, Linux,
+and Windows the same way):**
+
+```
+git clone https://github.com/revade-agent0001/github-setup.git
+cd github-setup
+GH_TOKEN=<token> node github-setup.js <repo_url>
+```
+
+**Clone and install globally, for a plain `github-setup` command:**
+
+```
+git clone https://github.com/revade-agent0001/github-setup.git
+cd github-setup
+npm install -g .
+GH_TOKEN=<token> github-setup <repo_url>
+```
+
+This last option depends on your npm global-prefix permissions (on some
+setups it needs `sudo npm install -g .`, or an `npm config set prefix`
+pointed at a directory you own) — if it fails, use one of the two options
+above instead, no permissions wrangling required.
+
+## Usage
+
 ```
 GH_TOKEN=<token> github-setup <repo_url>
 ```
