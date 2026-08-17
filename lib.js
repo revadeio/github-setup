@@ -98,10 +98,30 @@ function branchRulesetBody() {
     conditions: {
       ref_name: { include: ['~DEFAULT_BRANCH'], exclude: [] },
     },
+    // actor_id 5 is RepositoryRole's well-known ID for "Admin" (confirmed
+    // live: ids 1/3, lacking write permission, are rejected by GitHub's own
+    // validation; 2/4/5 are accepted and correspond to maintain/write/admin
+    // per github/rest-api-description#4406 and the GitHub Terraform
+    // provider's documented role mapping) — repo admins can still push
+    // directly instead of being blocked by their own ruleset.
+    bypass_actors: [
+      { actor_type: 'RepositoryRole', actor_id: 5, bypass_mode: 'always' },
+    ],
     rules: [
       { type: 'deletion' },
       { type: 'required_linear_history' },
       { type: 'non_fast_forward' },
+      {
+        type: 'pull_request',
+        parameters: {
+          required_approving_review_count: 1,
+          dismiss_stale_reviews_on_push: true,
+          require_code_owner_review: false,
+          require_last_push_approval: true,
+          required_review_thread_resolution: true,
+          allowed_merge_methods: ['squash'],
+        },
+      },
     ],
   };
 }
@@ -135,7 +155,9 @@ async function setup(repoUrlOrSlug, token, fetchImpl = fetch, log = () => {}) {
   log(`discussions enabled: ${discussions.hasDiscussionsEnabled}`);
 
   await applyBranchRuleset(owner, repo, token, fetchImpl);
-  log('default-branch ruleset applied (restrict deletions, require linear history, block force pushes)');
+  log('default-branch ruleset applied (restrict deletions, require linear history, block force ' +
+    'pushes, require a PR with 1 approval + last-push approval + resolved conversations + squash-only ' +
+    'merge, repo admins can bypass)');
 
   return { owner, repo };
 }

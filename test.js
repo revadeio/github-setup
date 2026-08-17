@@ -41,14 +41,34 @@ test('parseRepoUrl: rejects garbage input', () => {
   assert.throws(() => parseRepoUrl('not a repo at all'));
 });
 
-test('branchRulesetBody: targets default branch with the three required rules', () => {
+test('branchRulesetBody: targets default branch with the four required rules', () => {
   const body = branchRulesetBody();
   assert.equal(body.name, RULESET_NAME);
   assert.equal(body.target, 'branch');
   assert.equal(body.enforcement, 'active');
   assert.deepEqual(body.conditions.ref_name.include, ['~DEFAULT_BRANCH']);
   const types = body.rules.map((r) => r.type).sort();
-  assert.deepEqual(types, ['deletion', 'non_fast_forward', 'required_linear_history']);
+  assert.deepEqual(types, ['deletion', 'non_fast_forward', 'pull_request', 'required_linear_history']);
+});
+
+test('branchRulesetBody: repo admins bypass via the well-known RepositoryRole id', () => {
+  const body = branchRulesetBody();
+  assert.deepEqual(body.bypass_actors, [
+    { actor_type: 'RepositoryRole', actor_id: 5, bypass_mode: 'always' },
+  ]);
+});
+
+test('branchRulesetBody: pull_request rule matches the required review settings', () => {
+  const body = branchRulesetBody();
+  const pr = body.rules.find((r) => r.type === 'pull_request');
+  assert.deepEqual(pr.parameters, {
+    required_approving_review_count: 1,
+    dismiss_stale_reviews_on_push: true,
+    require_code_owner_review: false,
+    require_last_push_approval: true,
+    required_review_thread_resolution: true,
+    allowed_merge_methods: ['squash'],
+  });
 });
 
 // Fake fetch that records every call and returns canned responses keyed by

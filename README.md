@@ -55,8 +55,15 @@ remote (`git@github.com:owner/repo.git`), or a plain `owner/repo` slug.
   merges allowed. Squash merge commits default to the pull request's
   title and description. Head branches are auto-deleted after merge.
 - **Default-branch ruleset** (name: `default-branch-protection`):
-  restricts deletions, requires linear history, and blocks force pushes
-  on the repository's default branch.
+  restricts deletions, requires linear history, blocks force pushes, and
+  requires a pull request before merging (1 approval, dismiss stale
+  approvals on push, require approval of the most recent push, require
+  conversation resolution, squash-only) on the repository's default
+  branch. Repository admins can bypass the ruleset (`RepositoryRole` id
+  `5` — GitHub's undocumented-but-well-known ID for the built-in Admin
+  role, confirmed by live-testing which `actor_id` values GitHub's own
+  validation accepts, cross-referenced against
+  [github/rest-api-description#4406](https://github.com/github/rest-api-description/issues/4406)).
 
 Re-running against the same repo is safe: the repo-settings call is a
 plain idempotent `PATCH`, and the ruleset step looks for an existing
