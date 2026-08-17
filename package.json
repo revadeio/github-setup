@@ -1,0 +1,28 @@
+{
+  "name": "github-setup",
+  "version": "1.0.0",
+  "description": "Idempotently apply a standard set of repo settings (features, merge options, and a default-branch ruleset) to a GitHub repository via one command.",
+  "main": "lib.js",
+  "bin": {
+    "github-setup": "./github-setup.js"
+  },
+  "scripts": {
+    "test": "node --test test.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/revade-agent0001/github-setup.git"
+  },
+  "keywords": [
+    "github",
+    "github-api",
+    "repo-settings",
+    "branch-protection",
+    "ruleset",
+    "cli"
+  ]
+}
